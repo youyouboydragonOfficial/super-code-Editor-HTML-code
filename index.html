@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Code Editor</title>
+    <style>
+        /* --- ベースデザイン --- */
+        :root {
+            --bg-color: #f5f5f5;
+            --header-bg: #ffffff;
+            --border-color: #ddd;
+            --accent-color: #4a90e2; 
+            --repair-color: #9b59b6;
+            --danger-color: #e74c3c;
+            --text-color: #333;
+            --console-bg: #2b2b2b;
+            --console-text: #ddd;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            height: 100vh;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- ヘッダー --- */
+        header {
+            height: 50px;
+            background: var(--header-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            flex-shrink: 0;
+        }
+
+        h1 { font-size: 1.1rem; color: #555; font-weight: normal; }
+        .controls { display: flex; gap: 10px; align-items: center; }
+
+        button {
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            background: #fff;
+            color: #555;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            transition: 0.2s;
+        }
+        button:hover { background: #f0f0f0; }
+        
+        button.primary {
+            background: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+        }
+        button.primary:hover { background: #357abd; }
+
+        button.repair-btn { color: var(--repair-color); border-color: var(--repair-color); }
+        button.repair-btn:hover { background: #fdf5ff; }
+
+        button.reset-btn { color: var(--danger-color); border-color: var(--danger-color); }
+        button.reset-btn:hover { background: #fff5f5; }
+
+        /* 元に戻すボタン (初期非表示) */
+        button#undo-btn {
+            display: none; 
+            background: #7f8c8d; color: white; border-color: #7f8c8d;
+        }
+
+        /* --- メインエリア --- */
+        .workspace {
+            display: flex;
+            flex: 1;
+            height: calc(100vh - 50px);
+            position: relative;
+        }
+
+        /* --- 左側：エディタ --- */
+        .editor-pane {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border-color);
+            background: #fff;
+        }
+
+        .tabs {
+            display: flex;
+            background: #f9f9f9;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            color: #666;
+            border-right: 1px solid var(--border-color);
+            background: #f9f9f9;
+        }
+        .tab.active {
+            background: #fff;
+            color: var(--accent-color);
+            border-bottom: 2px solid var(--accent-color);
+            font-weight: bold;
+        }
+
+        .code-area-wrapper { flex: 1; position: relative; }
+
+        textarea {
+            width: 100%; height: 100%; border: none; padding: 15px;
+            font-family: 'Consolas', monospace; font-size: 14px; line-height: 1.5;
+            resize: none; outline: none; display: none;
+        }
+        textarea.active { display: block; }
+
+        /* --- 右側：プレビュー & コンソール --- */
+        .preview-pane {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+            position: relative;
+        }
+
+        .pane-header {
+            padding: 8px 15px;
+            background: #f9f9f9;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        iframe {
+            flex: 1; border: none; width: 100%; background: #fff;
+        }
+
+        /* --- コンソールエリア --- */
+        .console-pane {
+            height: 30px; /* 初期状態はヘッダーのみ */
+            background: var(--console-bg);
+            color: var(--console-text);
+            display: flex;
+            flex-direction: column;
+            transition: height 0.3s ease;
+            border-top: 1px solid #444;
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            z-index: 50;
+        }
+
+        .console-pane.open {
+            height: 200px;
+        }
+
+        .console-header {
+            height: 30px;
+            padding: 0 10px;
+            background: #1e1e1e;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            font-size: 0.8rem;
+            user-select: none;
+        }
+        .console-header:hover { background: #333; }
+
+        .console-controls { display: flex; align-items: center; gap: 10px; }
+        
+        .console-close-btn {
+            background: transparent; border: none; color: #aaa; font-size: 1.2rem;
+            cursor: pointer; padding: 0 5px; line-height: 1; display: none;
+        }
+        .console-close-btn:hover { color: #fff; }
+        .console-pane.open .console-close-btn { display: inline-block; }
+
+        .console-output {
+            flex: 1; padding: 10px; overflow-y: auto;
+            font-family: 'Consolas', monospace; font-size: 13px; display: none;
+        }
+        .console-pane.open .console-output { display: block; }
+
+        .log-item { margin-bottom: 4px; border-bottom: 1px solid #333; padding-bottom: 2px; }
+        .log-info { color: #ddd; }
+        .log-warn { color: #f1c40f; }
+        .log-error { color: #e74c3c; background: rgba(231, 76, 60, 0.1); }
+
+        /* --- 全画面ボタン --- */
+        .fs-btn { background: transparent; border: 1px solid #ccc; font-size: 0.8rem; }
+        .preview-pane.fullscreen {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 2000;
+        }
+        .preview-pane.fullscreen .pane-header { background: #333; color: #fff; }
+
+        /* --- 共通モーダル (通知 & 確認用) --- */
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 9998; display: none;
+        }
+        .modal {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            z-index: 9999;
+            width: 85%; max-width: 400px;
+            display: none;
+            text-align: center;
+        }
+        .modal h3 { margin-bottom: 15px; color: #333; font-size: 1.2rem; }
+        .modal-content { margin-bottom: 20px; text-align: left; font-size: 0.95rem; color: #555; max-height: 300px; overflow-y: auto;}
+        .modal-buttons { display: flex; justify-content: center; gap: 15px; }
+        .modal-buttons button { min-width: 80px; justify-content: center; }
+        .btn-confirm-yes { background: var(--danger-color); color: white; border-color: var(--danger-color); }
+        .btn-confirm-yes:hover { background: #c0392b; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Super Editor</h1>
+    <div class="controls">
+        <button id="undo-btn" onclick="askUndo()">↩ 元に戻す</button>
+        <button class="repair-btn" onclick="autoRepair()">🪄 自動修復</button>
+        <button class="reset-btn" onclick="askReset()">🔄 はじめから</button>
+        <button class="primary" onclick="runCode()">▶ 実行</button>
+    </div>
+</header>
+
+<div class="workspace">
+    <!-- エディタ -->
+    <div class="editor-pane">
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('html')">HTML</div>
+            <div class="tab" onclick="switchTab('css')">CSS</div>
+            <div class="tab" onclick="switchTab('js')">JS</div>
+        </div>
+        <div class="code-area-wrapper">
+            <textarea id="html-code" class="active" spellcheck="false" placeholder="HTMLコード..."></textarea>
+            <textarea id="css-code" spellcheck="false" placeholder="CSSコード..."></textarea>
+            <textarea id="js-code" spellcheck="false" placeholder="JavaScriptコード..."></textarea>
+        </div>
+    </div>
+
+    <!-- プレビュー -->
+    <div class="preview-pane" id="preview-pane">
+        <div class="pane-header">
+            <span>Preview</span>
+            <button class="fs-btn" onclick="toggleFullscreen()" id="fs-btn">⛶ 全画面</button>
+        </div>
+        <iframe id="preview-frame"></iframe>
+
+        <!-- コンソール -->
+        <div class="console-pane" id="console-pane">
+            <div class="console-header" onclick="toggleConsole()">
+                <span>🖥 Console <span id="console-count" style="font-size:0.8em; color:#888;">(0)</span></span>
+                <div class="console-controls">
+                    <span id="console-toggle-icon">▲</span>
+                    <button class="console-close-btn" onclick="closeConsole(event)" title="閉じる">×</button>
+                </div>
+            </div>
+            <div class="console-output" id="console-output"></div>
+        </div>
+    </div>
+</div>
+
+<!-- 汎用モーダル -->
+<div class="overlay" id="overlay"></div>
+<div class="modal" id="modal-window">
+    <h3 id="modal-title">確認</h3>
+    <div class="modal-content" id="modal-body"></div>
+    <div class="modal-buttons" id="modal-actions">
+        <!-- JSでボタンを生成 -->
+    </div>
+</div>
+
+<script>
+    // --- 要素取得 ---
+    const htmlArea = document.getElementById('html-code');
+    const cssArea = document.getElementById('css-code');
+    const jsArea = document.getElementById('js-code');
+    const frame = document.getElementById('preview-frame');
+    const undoBtn = document.getElementById('undo-btn');
+    const consoleOutput = document.getElementById('console-output');
+    
+    // --- 変数 ---
+    let backupData = null; // 元に戻す用
+
+    // --- タブ機能 ---
+    function switchTab(type) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('textarea').forEach(t => t.classList.remove('active'));
+        event.target.classList.add('active');
+        document.getElementById(type + '-code').classList.add('active');
+    }
+
+    // --- 全画面機能 ---
+    function toggleFullscreen() {
+        const pane = document.getElementById('preview-pane');
+        const btn = document.getElementById('fs-btn');
+        pane.classList.toggle('fullscreen');
+        if (pane.classList.contains('fullscreen')) {
+            btn.innerText = "× 戻す";
+            document.addEventListener('keydown', handleEscKey);
+        } else {
+            btn.innerText = "⛶ 全画面";
+            document.removeEventListener('keydown', handleEscKey);
+        }
+    }
+    function handleEscKey(e) { if(e.key === "Escape") toggleFullscreen(); }
+
+    // --- コンソール機能 ---
+    function toggleConsole() {
+        const pane = document.getElementById('console-pane');
+        const icon = document.getElementById('console-toggle-icon');
+        pane.classList.toggle('open');
+        icon.innerText = pane.classList.contains('open') ? "▼" : "▲";
+    }
+
+    function closeConsole(e) {
+        e.stopPropagation();
+        document.getElementById('console-pane').classList.remove('open');
+        document.getElementById('console-toggle-icon').innerText = "▲";
+    }
+
+    function logToConsole(type, args) {
+        const line = document.createElement('div');
+        line.className = `log-item log-${type}`;
+        const text = args.map(arg => (typeof arg === 'object') ? JSON.stringify(arg) : String(arg)).join(' ');
+        line.innerText = `[${type.toUpperCase()}] ${text}`;
+        consoleOutput.appendChild(line);
+        consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        document.getElementById('console-count').innerText = `(${consoleOutput.childElementCount})`;
+    }
+
+    // --- 実行機能 ---
+    function runCode() {
+        const html = htmlArea.value;
+        const css = cssArea.value;
+        const js = jsArea.value;
+
+        // コンソールリセット
+        consoleOutput.innerHTML = '';
+        document.getElementById('console-count').innerText = '(0)';
+
+        // コンソールハック用スクリプト
+        const consoleScript = `
+            <script>
+                (function(){
+                    const oldLog = console.log; const oldWarn = console.warn; const oldError = console.error;
+                    function send(type, args){ window.parent.postMessage({source: 'editor-console', type: type, args: args}, '*'); }
+                    console.log = function(...args){ send('info', args); oldLog.apply(console, args); };
+                    console.warn = function(...args){ send('warn', args); oldWarn.apply(console, args); };
+                    console.error = function(...args){ send('error', args); oldError.apply(console, args); };
+                    window.onerror = function(msg, url, line){ send('error', [msg + " (Line: " + line + ")"]); };
+                })();
+            <\/script>
+        `;
+
+        let finalCode = "";
+        const isFullDocument = /<!DOCTYPE/i.test(html) || /<html/i.test(html);
+
+        if (isFullDocument) {
+            finalCode = html;
+            if (css.trim()) finalCode = finalCode.replace(/<\/head>/i, `<style>${css}</style>\n</head>`) || `<style>${css}</style>` + finalCode;
+            finalCode = consoleScript + finalCode; // コンソールスクリプト注入
+            if (js.trim()) finalCode = finalCode.replace(/<\/body>/i, `<script>${js}<\/script>\n</body>`) || finalCode + `<script>${js}<\/script>`;
+        } else {
+            // HTMLが空の場合でもスケルトンを作成して真っ白にする
+            finalCode = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><style>${css}</style>${consoleScript}</head><body>${html}<script>${js}<\/script></body></html>`;
+        }
+
+        const frameDoc = frame.contentDocument || frame.contentWindow.document;
+        frameDoc.open();
+        frameDoc.write(finalCode);
+        frameDoc.close();
+    }
+
+    window.addEventListener('message', function(event) {
+        if (event.data && event.data.source === 'editor-console') {
+            logToConsole(event.data.type, event.data.args);
+        }
+    });
+
+    // --- 自動修復機能 ---
+    function autoRepair() {
+        // バックアップ保存
+        backupData = { html: htmlArea.value, css: cssArea.value, js: jsArea.value };
+        
+        let logs = [];
+        let currentHtml = htmlArea.value;
+
+        // 全角→半角
+        const fixFull = s => s.replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+                             .replace(/[””]/g, '"').replace(/[’’]/g, "'");
+        
+        const newHtml = fixFull(currentHtml);
+        const newCss = fixFull(cssArea.value);
+        const newJs = fixFull(jsArea.value);
+
+        if(newHtml !== currentHtml) logs.push("HTMLの全角文字を修正");
+        if(newCss !== cssArea.value) logs.push("CSSの全角文字を修正");
+        if(newJs !== jsArea.value) logs.push("JSの全角文字を修正");
+        
+        currentHtml = newHtml;
+
+        // タグミス修正
+        const typos = [
+            {s:'<dvi', d:'<div', m:'<dvi>→<div>'}, {s:'dvi>', d:'div>', m:'</dvi>→</div>'},
+            {s:'srcipt', d:'script', m:'srcipt→script'}, {s:'styel', d:'style', m:'styel→style'}
+        ];
+        typos.forEach(t => {
+            if(currentHtml.includes(t.s)){ currentHtml = currentHtml.split(t.s).join(t.d); logs.push(t.m); }
+        });
+
+        // 閉じタグ補完
+        ['div','p','span'].forEach(tag => {
+            const o = (currentHtml.match(new RegExp(`<${tag}`, 'g')) || []).length;
+            const c = (currentHtml.match(new RegExp(`<\/${tag}>`, 'g')) || []).length;
+            if(o > c) { currentHtml += `\n<!-- Auto -->` + `</${tag}>`.repeat(o-c); logs.push(`${tag}閉じタグ補完`); }
+        });
+
+        if (logs.length > 0) {
+            htmlArea.value = currentHtml; cssArea.value = newCss; jsArea.value = newJs;
+            undoBtn.style.display = 'inline-flex';
+            runCode();
+            showModal("🪄 修復完了", "<ul>" + logs.map(l=>`<li>${l}</li>`).join('') + "</ul>", [{text:"OK", type:"primary", action:closeModal}]);
+        } else {
+            showModal("通知", "修復が必要な箇所は見つかりませんでした。", [{text:"OK", type:"primary", action:closeModal}]);
+        }
+    }
+
+    // --- 汎用モーダル表示関数 ---
+    // buttons: [{text: "OK", type: "primary", action: func}, ...]
+    function showModal(title, html, buttons) {
+        document.getElementById('modal-title').innerText = title;
+        document.getElementById('modal-body').innerHTML = html;
+        
+        const btnContainer = document.getElementById('modal-actions');
+        btnContainer.innerHTML = '';
+        
+        buttons.forEach(btn => {
+            const b = document.createElement('button');
+            b.innerText = btn.text;
+            if(btn.type === 'primary') b.classList.add('primary');
+            if(btn.type === 'danger') b.classList.add('btn-confirm-yes');
+            b.onclick = btn.action;
+            btnContainer.appendChild(b);
+        });
+
+        document.getElementById('overlay').style.display = 'block';
+        document.getElementById('modal-window').style.display = 'block';
+    }
+
+    function closeModal() {
+        document.getElementById('overlay').style.display = 'none';
+        document.getElementById('modal-window').style.display = 'none';
+    }
+
+    // --- リセット（はじめから） ---
+    function askReset() {
+        showModal("確認", "コードをすべて消去して、最初からやり直しますか？<br>（この操作は取り消せません）", [
+            { text: "キャンセル", type: "normal", action: closeModal },
+            { text: "リセットする", type: "danger", action: executeReset }
+        ]);
+    }
+
+    function executeReset() {
+        htmlArea.value = "";
+        cssArea.value = "";
+        jsArea.value = "";
+        backupData = null;
+        undoBtn.style.display = 'none';
+        runCode(); // これで真っ白な状態が実行される
+        closeModal();
+    }
+
+    // --- 元に戻す ---
+    function askUndo() {
+        if(!backupData) return;
+        showModal("確認", "修復を取り消して、元の状態に戻しますか？", [
+            { text: "キャンセル", type: "normal", action: closeModal },
+            { text: "元に戻す", type: "primary", action: executeUndo }
+        ]);
+    }
+
+    function executeUndo() {
+        htmlArea.value = backupData.html;
+        cssArea.value = backupData.css;
+        jsArea.value = backupData.js;
+        undoBtn.style.display = 'none';
+        backupData = null;
+        runCode();
+        closeModal();
+    }
+
+    // --- 初期化 ---
+    runCode();
+
+    // Tabキー対応
+    document.querySelectorAll('textarea').forEach(area => {
+        area.addEventListener('keydown', function(e) {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                document.execCommand('insertText', false, '    ');
+            }
+        });
+    });
+</script>
+</body>
+</html>
