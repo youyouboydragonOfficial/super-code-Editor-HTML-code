@@ -156,10 +156,8 @@
             flex-direction: column;
             transition: height 0.3s ease;
             border-top: 1px solid #444;
-            position: absolute;
-            bottom: 0;
             width: 100%;
-            z-index: 50;
+            flex-shrink: 0;
         }
 
         .console-pane.open {
@@ -301,6 +299,7 @@
     
     // --- 変数 ---
     let backupData = null; // 元に戻す用
+    let previewBlobUrl = null;
 
     // --- タブ機能 ---
     function switchTab(type) {
@@ -403,7 +402,14 @@
             finalCode = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">${css.trim() ? `<style>${css}</style>` : ''}${consoleScript}</head><body>${html}${js.trim() ? `<script>${js}<\/script>` : ''}</body></html>`;
         }
 
-        frame.srcdoc = finalCode;
+        if (previewBlobUrl) {
+            URL.revokeObjectURL(previewBlobUrl);
+            previewBlobUrl = null;
+        }
+
+        const previewBlob = new Blob([finalCode], { type: 'text/html' });
+        previewBlobUrl = URL.createObjectURL(previewBlob);
+        frame.src = previewBlobUrl;
     }
 
     window.addEventListener('message', function(event) {
