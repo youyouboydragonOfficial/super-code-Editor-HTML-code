@@ -373,23 +373,37 @@
             <\/script>
         `;
 
+        const injectIntoHead = (doc, content) => {
+            if (/<\/head>/i.test(doc)) {
+                return doc.replace(/<\/head>/i, `${content}\n</head>`);
+            }
+            if (/<body/i.test(doc)) {
+                return doc.replace(/<body[^>]*>/i, match => `${content}\n${match}`);
+            }
+            return `${content}\n${doc}`;
+        };
+
+        const injectIntoBodyEnd = (doc, content) => {
+            if (/<\/body>/i.test(doc)) {
+                return doc.replace(/<\/body>/i, `${content}\n</body>`);
+            }
+            return `${doc}\n${content}`;
+        };
+
         let finalCode = "";
         const isFullDocument = /<!DOCTYPE/i.test(html) || /<html/i.test(html);
 
         if (isFullDocument) {
             finalCode = html;
-            if (css.trim()) finalCode = finalCode.replace(/<\/head>/i, `<style>${css}</style>\n</head>`) || `<style>${css}</style>` + finalCode;
-            finalCode = consoleScript + finalCode; // コンソールスクリプト注入
-            if (js.trim()) finalCode = finalCode.replace(/<\/body>/i, `<script>${js}<\/script>\n</body>`) || finalCode + `<script>${js}<\/script>`;
+            const headInjection = `${css.trim() ? `<style>${css}</style>` : ''}${consoleScript}`;
+            finalCode = injectIntoHead(finalCode, headInjection);
+            if (js.trim()) finalCode = injectIntoBodyEnd(finalCode, `<script>${js}<\/script>`);
         } else {
             // HTMLが空の場合でもスケルトンを作成して真っ白にする
-            finalCode = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><style>${css}</style>${consoleScript}</head><body>${html}<script>${js}<\/script></body></html>`;
+            finalCode = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">${css.trim() ? `<style>${css}</style>` : ''}${consoleScript}</head><body>${html}${js.trim() ? `<script>${js}<\/script>` : ''}</body></html>`;
         }
 
-        const frameDoc = frame.contentDocument || frame.contentWindow.document;
-        frameDoc.open();
-        frameDoc.write(finalCode);
-        frameDoc.close();
+        frame.srcdoc = finalCode;
     }
 
     window.addEventListener('message', function(event) {
